@@ -1,0 +1,2 @@
+import { Modal } from './Modal'
+export function ConfirmDialog({open,title,description,onCancel,onConfirm,danger=true}:{open:boolean;title:string;description:string;onCancel:()=>void;onConfirm:()=>void;danger?:boolean}){return <Modal open={open} onClose={onCancel} title={title}><p className="muted confirm-text">{description}</p><div className="actions"><button className="secondary" onClick={onCancel}>取消</button><button className={danger?'danger':'primary'} onClick={onConfirm}>确认</button></div></Modal>}

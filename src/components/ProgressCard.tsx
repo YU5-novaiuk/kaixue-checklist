@@ -1,0 +1,1 @@
+export function ProgressCard({done,total,percent}:{done:number;total:number;percent:number}){return <section className="progress-card"><div className="progress-row"><div><strong>{done}</strong><span> / {total} 已完成</span></div><b>{percent}%</b></div><div className="progress-track"><i style={{width:`${percent}%`}}/></div></section>}
