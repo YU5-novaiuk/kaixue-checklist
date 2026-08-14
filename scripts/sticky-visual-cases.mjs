@@ -58,5 +58,30 @@ try{
  await interactionPage.goto('http://localhost:3210/luggage',{waitUntil:'networkidle'})
  assert.equal(await interactionPage.getByText('学校快递站',{exact:true}).count(),1)
  await interactionPage.close()
- console.log('实页用例通过：Sticky、多宽度、管理模式、四种购买情况持久化、采购筛选与学校快递站单入口')
+ const batchPage=await browser.newPage({viewport:{width:390,height:760}})
+ await batchPage.addInitScript(data=>{if(!localStorage.getItem('campus-ready-data-v1'))localStorage.setItem('campus-ready-data-v1',JSON.stringify(data))},stored)
+ await batchPage.goto('http://localhost:3210/checklist',{waitUntil:'networkidle'})
+ const mixedNames=['身份证','录取通知书','电脑','床单','缴纳学费']
+ const selectMixed=async()=>{await batchPage.getByRole('button',{name:'管理',exact:true}).click();for(const name of mixedNames)await batchPage.locator('.check-row').filter({has:batchPage.getByText(name,{exact:true})}).locator('.check-button').click()}
+ await selectMixed()
+ await batchPage.getByRole('button',{name:'设置',exact:true}).click()
+ assert.equal(await batchPage.getByLabel('购买情况').isEnabled(),true);assert.equal(await batchPage.getByLabel('放置位置').isEnabled(),true)
+ await batchPage.getByLabel('购买情况').selectOption('purchased')
+ await batchPage.getByLabel('关闭').click()
+ assert.equal(await batchPage.getByRole('button',{name:'完成',exact:true}).isVisible(),true);assert.match(await batchPage.locator('.bulk-bar span').innerText(),/已选 5 项/)
+ await batchPage.getByRole('button',{name:'设置',exact:true}).click();await batchPage.getByLabel('购买情况').selectOption('purchased')
+ const purchaseUrl=batchPage.url();const purchaseScroll=await batchPage.evaluate(()=>scrollY)
+ await batchPage.getByRole('button',{name:'应用到所选事项',exact:true}).click();await batchPage.waitForTimeout(250)
+ const afterPurchaseScroll=await batchPage.evaluate(()=>scrollY)
+ assert.equal(batchPage.url(),purchaseUrl);assert.equal(await batchPage.locator('.bulk-bar').count(),0);assert.equal(await batchPage.getByRole('button',{name:'管理',exact:true}).isVisible(),true);assert.ok(afterPurchaseScroll>0);assert.ok(Math.abs(afterPurchaseScroll-purchaseScroll)<80)
+ let batchSaved=await batchPage.evaluate(()=>JSON.parse(localStorage.getItem('campus-ready-data-v1')))
+ for(const name of mixedNames){const item=batchSaved.items.find(entry=>entry.name===name);assert.equal(item?.purchaseStatus,'purchased');assert.equal(item?.purchaseStatusOverride,'purchased')}
+ await batchPage.getByRole('button',{name:'管理',exact:true}).click();assert.match(await batchPage.locator('.bulk-bar span').innerText(),/已选 0 项/);await batchPage.getByRole('button',{name:'完成',exact:true}).click()
+ await selectMixed();await batchPage.getByRole('button',{name:'设置',exact:true}).click();await batchPage.getByLabel('放置位置').selectOption('carry');await batchPage.getByRole('button',{name:'应用到所选事项',exact:true}).click();await batchPage.waitForTimeout(250)
+ assert.equal(await batchPage.locator('.bulk-bar').count(),0);await batchPage.reload({waitUntil:'networkidle'});batchSaved=await batchPage.evaluate(()=>JSON.parse(localStorage.getItem('campus-ready-data-v1')))
+ for(const name of mixedNames){const item=batchSaved.items.find(entry=>entry.name===name);assert.equal(item?.purchaseStatus,'purchased');assert.equal(item?.luggageId,'carry')}
+ await batchPage.goto('http://localhost:3210/luggage',{waitUntil:'networkidle'});await batchPage.getByRole('button',{name:/随身包/}).click()
+ for(const name of mixedNames)assert.equal(await batchPage.locator('.packed-list').getByText(name,{exact:true}).count(),1)
+ await batchPage.close()
+ console.log('实页用例通过：Sticky、混合类型批量全量写入、取消保留选择、成功后退出、重新进入清零、刷新持久化及行李位置显示')
 }finally{await browser.close()}

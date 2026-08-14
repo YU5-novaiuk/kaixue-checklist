@@ -52,15 +52,15 @@ for(const item of [identity,notice,diploma,archive]){assert.equal(supportsLocati
 assert.equal(supportsLocation(digitalPhoto),false);assert.equal(supportsLocation(tuition),false)
 assert.equal(supportsPurchase(computer),true);assert.equal(supportsLocation(computer),true)
 
-// 混合批量操作：只更新适用事项，其余跳过。
+// 混合批量操作：用户明确选择后，购买情况和位置写入全部事项。
 const mixed=[identity,notice,computer,{...base,id:'sheet'},tuition]
 const located=mixed.map(item=>applyBatchItemPatch(item,{luggageId:'carry'},now))
-assert.equal(located.filter(item=>item.luggageId==='carry').length,4);assert.equal(located.find(item=>item.id==='tuition')?.luggageId,undefined)
+assert.equal(located.filter(item=>item.luggageId==='carry').length,5);assert.equal(located.find(item=>item.id==='tuition')?.luggageId,'carry')
 const purchased=mixed.map(item=>applyBatchItemPatch(item,{purchaseStatus:'purchased'},now))
-assert.equal(purchased.filter(item=>item.purchaseStatus==='purchased').length,2)
-assert.equal(purchased.find(item=>item.id==='identity')?.purchaseStatus,undefined)
+assert.equal(purchased.filter(item=>item.purchaseStatus==='purchased').length,5)
+assert.equal(purchased.find(item=>item.id==='identity')?.purchaseStatusOverride,'purchased');assert.equal(purchased.find(item=>item.id==='tuition')?.purchaseStatus,'purchased')
 const buyAtSchool=mixed.map(item=>applyBatchItemPatch(item,{purchaseStatus:'buy_after_arrival'},now))
-assert.equal(buyAtSchool.filter(item=>item.purchaseStatus==='buy_after_arrival').length,2);assert.equal(buyAtSchool.find(item=>item.id==='computer')?.purchaseStatusOverride,'buy_after_arrival')
+assert.equal(buyAtSchool.filter(item=>item.purchaseStatus==='buy_after_arrival').length,5);assert.equal(buyAtSchool.find(item=>item.id==='computer')?.purchaseStatusOverride,'buy_after_arrival')
 
 // 系统购买情况按画像解析，用户手动选择优先于系统推荐。
 const newRemoteDorm={studentStatus:'new',educationStage:'undergraduate',accommodation:'dorm',outOfTown:true,militaryTraining:'yes'}
@@ -89,6 +89,7 @@ const timingAfter=migrateItem({...base,purchaseTiming:'after_arrival'},undefined
 const purchasedWins=migrateItem({...base,purchaseStatus:'purchased',purchaseTiming:'before_arrival'},undefined,10);assert.equal(purchasedWins.purchaseStatus,'purchased')
 const timingOverride=migrateItem({...base,purchaseTimingOverride:'before_arrival'},undefined,10);assert.equal(timingOverride.purchaseStatus,'to_buy');assert.equal(timingOverride.purchaseStatusOverride,'to_buy')
 const migratedDocument=migrateItem({...identity,luggageId:'carry'});assert.equal(migratedDocument.luggageId,'carry')
+const migratedTask=migrateItem({...tuition,purchaseStatus:'purchased',purchaseStatusOverride:'purchased',luggageId:'carry'},undefined,11);assert.equal(migratedTask.purchaseStatus,'purchased');assert.equal(migratedTask.luggageId,'carry')
 
 // 四种购买情况进入采购筛选与本站备份，旧 purchaseTiming 不再导出。
 const afterItem={...base,id:'after',purchaseStatus:'buy_after_arrival'};const purchaseStats=getPurchaseStats([inProgress,packed,afterItem],categories)

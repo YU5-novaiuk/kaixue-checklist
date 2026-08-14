@@ -1,7 +1,6 @@
 import { createDefaultData,defaultCategories,defaultLuggage,defaultProfile,makeDefaultItems } from '@/data/defaults'
 import { generateCategories,generateChecklist } from '@/lib/checklistGenerator'
 import { APP_IDENTIFIER,BACKUP_SCHEMA_VERSION,DATA_VERSION } from '@/lib/constants'
-import { supportsLocation,supportsPurchase } from '@/lib/itemCapabilities'
 import { AppData,BackupPayload,Category,ChecklistItem,PreparationStatus,PurchaseStatus,UserProfile } from '@/types/checklist'
 
 type Loose=Record<string,unknown>
@@ -46,8 +45,6 @@ export function migrateItem(value:unknown,fallback?:ChecklistItem,sourceVersion=
  const source=isObject(value)?value:{};const migrated=migrateStatuses(source,sourceVersion);const itemType=source.itemType==='document'||source.itemType==='task'||source.itemType==='physical'?source.itemType:fallback?.itemType||'physical';const name=typeof source.name==='string'?source.name:fallback?.name||'未命名事项'
  const now=new Date().toISOString()
  const item:ChecklistItem={id:typeof source.id==='string'?source.id:fallback?.id||`recovered-${Date.now()}`,name,categoryId:typeof source.categoryId==='string'?source.categoryId:fallback?.categoryId||'uncategorized',itemType,priority:source.priority==='essential'||source.priority==='optional'||source.priority==='recommended'?source.priority:fallback?.priority||'recommended',preparationStatus:migrated.preparationStatus,purchaseStatus:migrated.purchaseStatus??fallback?.purchaseStatus,purchaseStatusOverride:migrated.purchaseStatusOverride,helperText:typeof source.helperText==='string'?source.helperText:fallback?.helperText,systemTipHidden:source.systemTipHidden===true,visibilityOverride:source.visibilityOverride==='hide'?'hide':undefined,applicability:fallback?.applicability,rules:fallback?.rules,quantity:typeof source.quantity==='number'?source.quantity:fallback?.quantity,actualPrice:typeof source.actualPrice==='number'?source.actualPrice:undefined,purchasePlatform:typeof source.purchasePlatform==='string'?source.purchasePlatform:undefined,reminderDate:typeof source.reminderDate==='string'?source.reminderDate:undefined,luggageId:migrated.luggageId,tags:Array.isArray(source.tags)?source.tags.filter((x):x is string=>typeof x==='string'):fallback?.tags||[],note:typeof source.note==='string'?source.note:undefined,isSystemItem:source.isSystemItem===true||fallback?.isSystemItem===true,hidden:source.hidden===true,createdAt:typeof source.createdAt==='string'?source.createdAt:fallback?.createdAt||now,updatedAt:typeof source.updatedAt==='string'?source.updatedAt:fallback?.updatedAt||now}
- if(!supportsPurchase(item)){item.purchaseStatus=undefined;item.purchaseStatusOverride=undefined;item.actualPrice=undefined;item.purchasePlatform=undefined}
- if(!supportsLocation(item))item.luggageId=undefined
  return item
 }
 
