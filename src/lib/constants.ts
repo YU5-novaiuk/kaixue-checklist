@@ -1,7 +1,11 @@
-import { ItemStatus, ItemType, Priority } from '@/types/checklist'
-export const statusLabels:Record<ItemStatus,string>={unchecked:'未确认',unprepared:'未准备',prepared:'已准备',todo:'待办理',owned:'已有',to_buy:'待购买',purchased:'已购买',packed:'已装箱',buy_after_arrival:'到校购买',completed:'已完成',not_needed:'暂不需要'}
+import { ItemType,PreparationStatus,Priority,PurchaseStatus } from '@/types/checklist'
+export const preparationStatusLabels:Record<PreparationStatus,string>={unprepared:'未准备',in_progress:'准备中',prepared:'已准备'}
+export const purchaseStatusLabels:Record<PurchaseStatus,string>={not_required:'不需要购买',to_buy:'待购买',purchased:'已购买',buy_after_arrival:'到校购买'}
 export const priorityLabels:Record<Priority,string>={essential:'必需',recommended:'建议',optional:'按需'}
 export const itemTypeLabels:Record<ItemType,string>={physical:'物品',document:'证件资料',task:'待办事项'}
-export const statusesByType:Record<ItemType,ItemStatus[]>={physical:['unchecked','owned','to_buy','purchased','packed','buy_after_arrival','not_needed'],document:['unprepared','prepared','packed','not_needed'],task:['todo','completed','not_needed']}
-export const doneStatuses:ItemStatus[]=['owned','prepared','packed','completed','not_needed']
+export const preparationStatuses:PreparationStatus[]=['unprepared','in_progress','prepared']
+export const purchaseStatuses:PurchaseStatus[]=['not_required','to_buy','purchased','buy_after_arrival']
 export const storageKey='campus-ready-data-v1'
+export const DATA_VERSION=11
+export const BACKUP_SCHEMA_VERSION=3
+export const APP_IDENTIFIER='open-school-checklist'

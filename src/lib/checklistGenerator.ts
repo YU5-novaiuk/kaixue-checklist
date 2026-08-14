@@ -1,5 +1,5 @@
 import { defaultCategories, makeDefaultItems } from '../data/defaults'
-import { Category, ChecklistItem, ItemApplicability, ItemRuleOverride, ItemStatus, ItemType, Priority, StudentStatus, UserProfile } from '@/types/checklist'
+import { Category,ChecklistItem,ItemApplicability,ItemRuleOverride,ItemType,Priority,PurchaseStatus,StudentStatus,UserProfile } from '@/types/checklist'
 
 type ExtraSeed=[id:string,categoryId:string,name:string,itemType:ItemType,priority:Priority,helperText?:string,applicability?:ItemApplicability]
 const ALL_STATUSES:StudentStatus[]=['new','returning']
@@ -20,6 +20,7 @@ const returningFixedDorm=new Set(['漱口杯','拖鞋','餐具','睡衣'])
 const returningPersonal=new Set(['牙刷','洗面奶','毛巾'])
 const returningConsumables=new Set(['牙膏','洗发水','沐浴露','洗衣液','纸巾','湿巾','垃圾袋','退烧药','感冒药'])
 const studyBasics=new Set(['笔记本','签字笔','铅笔','橡皮','荧光笔','便利贴','文件夹','计算器','专业学习工具'])
+const outOfTownDormConsumables=new Set(['洗衣液','洗发水','沐浴露','纸巾'])
 
 const extras:ExtraSeed[]=[
  ['new-materials','documents','新生报到材料','document','essential','按学校通知逐项核对，纸质材料集中放入证件袋',{studentStatuses:['new'],newStudentOnly:true,reason:'新生报到'}],
@@ -54,8 +55,7 @@ const extras:ExtraSeed[]=[
  ['training-unknown','registration','确认是否需要参加军训','task','recommended','查看学校新生通知，确认军训时间和物品要求',{studentStatuses:['new'],reason:'军训安排尚未确认'}],
 ]
 
-const initialStatus=(type:ItemType):ItemStatus=>type==='physical'?'unchecked':type==='document'?'unprepared':'todo'
-const makeExtra=(seed:ExtraSeed):ChecklistItem=>({id:`ctx-${seed[0]}`,categoryId:seed[1],name:seed[2],itemType:seed[3],priority:seed[4],helperText:seed[5],applicability:seed[6],status:initialStatus(seed[3]),quantity:1,tags:[],isSystemItem:true,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()})
+const makeExtra=(seed:ExtraSeed):ChecklistItem=>({id:`ctx-${seed[0]}`,categoryId:seed[1],name:seed[2],itemType:seed[3],priority:seed[4],helperText:seed[5],applicability:seed[6],preparationStatus:'unprepared',quantity:1,tags:[],isSystemItem:true,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()})
 
 const matches=(rule:ItemRuleOverride,profile:UserProfile)=>{const w=rule.when;return (!w.studentStatuses||w.studentStatuses.includes(profile.studentStatus))&&(!w.educationStages||(!!profile.educationStage&&w.educationStages.includes(profile.educationStage)))&&(!w.accommodations||w.accommodations.includes(profile.accommodation))&&(w.outOfTown===undefined||w.outOfTown===profile.outOfTown)&&(!w.militaryTraining||w.militaryTraining.includes(profile.militaryTraining||'no'))}
 function scenarioRules(item:ChecklistItem):ItemRuleOverride[]{const rules:ItemRuleOverride[]=[]
@@ -63,13 +63,13 @@ function scenarioRules(item:ChecklistItem):ItemRuleOverride[]{const rules:ItemRu
  if(['dorm','wash','clean','food'].includes(item.categoryId))rules.push({when:{accommodations:['commute'],outOfTown:false},visible:false})
  if(profileKey(item)&&localCommuteKeepByCategory.has(profileKey(item)))rules.push({when:{accommodations:['commute'],outOfTown:false},visible:true})
  if(offCampusExclude.has(item.name)||item.categoryId==='dorm')rules.push({when:{accommodations:['commute'],outOfTown:true},visible:false})
- if(offCampusLivingCategories.has(item.categoryId))rules.push({when:{accommodations:['commute'],outOfTown:true},visible:true,priority:'recommended',helperText:'校外住处如已配备或假期留存，可直接标记为已有'})
+ if(offCampusLivingCategories.has(item.categoryId))rules.push({when:{accommodations:['commute'],outOfTown:true},visible:true,priority:'recommended',helperText:'校外住处如已配备或假期留存，可直接标记为已准备'})
  if(firstDormItems.has(item.name)&&['床单','被套','枕套','枕头','被子','床垫'].includes(item.name))rules.push({when:{studentStatuses:['new'],accommodations:['commute'],outOfTown:true},visible:true,priority:item.name==='床垫'?'recommended':'essential',helperText:'如校外住处未提供，请提前确认配置'})
  if(returningFixedDorm.has(item.name))rules.push({when:{studentStatuses:['returning'],accommodations:['dorm']},visible:false})
- if(returningPersonal.has(item.name))rules.push({when:{studentStatuses:['returning'],accommodations:['dorm']},visible:true,priority:'optional',helperText:'如果假期带回家了记得带回；留在宿舍可直接标记为已有'})
+ if(returningPersonal.has(item.name))rules.push({when:{studentStatuses:['returning'],accommodations:['dorm']},visible:true,priority:'optional',helperText:'如果假期带回家了记得带回；留在宿舍可直接标记为已准备'})
  if(returningConsumables.has(item.name))rules.push({when:{studentStatuses:['returning'],accommodations:['dorm']},visible:true,priority:'recommended',helperText:'先确认宿舍剩余量，不够再补',tags:['返校补货']})
  if(studyBasics.has(item.name))rules.push({when:{studentStatuses:['returning']},priority:item.priority==='optional'?'optional':'recommended',helperText:'先检查上学期剩余用品，需要再补'})
- if(item.categoryId==='beauty')rules.push({when:{studentStatuses:['returning'],accommodations:['dorm']},priority:'optional',helperText:'带日常使用的即可；如留在宿舍可直接标记为已有'})
+ if(item.categoryId==='beauty')rules.push({when:{studentStatuses:['returning'],accommodations:['dorm']},priority:'optional',helperText:'带日常使用的即可；如留在宿舍可直接标记为已准备'})
  if(item.categoryId==='medical'&&item.name!=='个人长期使用药物')rules.push({when:{studentStatuses:['returning'],accommodations:['dorm']},priority:'optional',helperText:'先检查宿舍现有药品是否过期或需要补充'},{when:{accommodations:['commute'],outOfTown:false},visible:false})
  return rules}
 const profileKey=(item:ChecklistItem)=>`${item.categoryId}:${item.name}`
@@ -81,9 +81,9 @@ function inferredApplicability(item:ChecklistItem):ItemApplicability {
  if(firstDormItems.has(item.name))Object.assign(a,{studentStatuses:['new'],accommodations:['dorm'],firstDormMoveInOnly:true,reason:'首次住校'})
  if(item.categoryId==='dorm'||dormOnly.has(item.name))Object.assign(a,{accommodations:['dorm'],reason:a.firstDormMoveInOnly?'首次住校':'住校生活'})
  if(item.categoryId==='training')Object.assign(a,{studentStatuses:['new'],militaryTraining:true,reason:'新生参加军训'})
- if(item.categoryId==='beauty')Object.assign(a,{modules:['beauty'],reason:'用户选择护肤或化妆'})
+ if(item.categoryId==='beauty')Object.assign(a,{reason:'用户可在分类管理中自行启用'})
  if(outOfTownOnly.has(item.name))Object.assign(a,{outOfTown:true,reason:'异地出行'})
- if(luggageModuleOnly.has(item.name))Object.assign(a,{modules:['luggage'],reason:'用户启用行李整理'})
+ if(luggageModuleOnly.has(item.name))Object.assign(a,{reason:'异地行李整理'})
  return a
 }
 
@@ -98,26 +98,32 @@ function baseApplicability(item:ChecklistItem,profile:UserProfile){
  if(a.newStudentOnly&&profile.studentStatus!=='new')return false
  if(a.returningStudentOnly&&profile.studentStatus!=='returning')return false
  if(a.firstDormMoveInOnly&&(profile.accommodation!=='dorm'||profile.studentStatus!=='new'))return false
- if(a.modules?.includes('beauty')&&!profile.enableSkincare&&!profile.enableMakeup)return false
- if(a.modules?.includes('luggage')&&!profile.enableLuggage)return false
+ if(item.categoryId==='beauty')return false
  if(profile.accommodation==='commute'&&item.categoryId!=='commute'&&!commuteKeep.has(item.name)&&!firstAdmissionDocuments.has(item.name)&&!firstAdmissionTasks.has(item.name)&&!undergraduateOnly.has(item.name)&&!item.id.startsWith('ctx-'))return false
  if(profile.studentStatus==='returning'&&(returningExcluded.has(item.name)||(!returningDormKeep.has(item.name)&&!item.id.startsWith('ctx-'))))return false
  if(!profile.outOfTown&&outOfTownOnly.has(item.name))return false
  return true
 }
 
+function resolvePurchaseStatus(item:ChecklistItem,profile:UserProfile):PurchaseStatus|undefined{
+ if(item.itemType!=='physical')return undefined
+ if(profile.studentStatus==='returning')return 'not_required'
+ if(profile.studentStatus==='new'&&profile.accommodation==='dorm'&&profile.outOfTown&&outOfTownDormConsumables.has(item.name))return 'buy_after_arrival'
+ return item.purchaseStatus
+}
+
 export function resolveItemForProfile(item:ChecklistItem,profile:UserProfile){
- let visible=baseApplicability(item,profile);let priority=item.priority;let helperText=item.helperText;let status=item.status;let tags=[...item.tags]
- for(const rule of [...scenarioRules(item),...(item.rules||[])])if(matches(rule,profile)){if(rule.visible!==undefined)visible=rule.visible;if(rule.priority)priority=rule.priority;if(rule.helperText!==undefined)helperText=rule.helperText;if(rule.status)status=rule.status;if(rule.tags)tags=[...new Set([...tags,...rule.tags])]}
- return {visible,priority,helperText,status,tags}
+ let visible=baseApplicability(item,profile);let priority=item.priority;let helperText=item.helperText;let preparationStatus=item.preparationStatus;let tags=[...item.tags]
+ for(const rule of [...scenarioRules(item),...(item.rules||[])])if(matches(rule,profile)){if(rule.visible!==undefined)visible=rule.visible;if(rule.priority)priority=rule.priority;if(rule.helperText!==undefined)helperText=rule.helperText;if(rule.preparationStatus)preparationStatus=rule.preparationStatus;if(rule.tags)tags=[...new Set([...tags,...rule.tags])]}
+ return {visible,priority,helperText,preparationStatus,purchaseStatus:resolvePurchaseStatus(item,profile),tags}
 }
 export function isItemApplicable(item:ChecklistItem,profile:UserProfile){return resolveItemForProfile(item,profile).visible}
 
-export function generateChecklist(profile:UserProfile,previous:ChecklistItem[]=[]){
+export function generateChecklist(profile:UserProfile,previous:ChecklistItem[]=[],forcedVisibleCategories:string[]=[]){
  const master=[...makeDefaultItems(),...extras.map(makeExtra)].map(item=>({...item,applicability:item.applicability||inferredApplicability(item)}))
- const prior=new Map(previous.filter(x=>x.isSystemItem).map(x=>[x.id,x]));const custom=previous.filter(x=>!x.isSystemItem)
- return [...master.map(item=>{const resolved=resolveItemForProfile(item,profile);const old=prior.get(item.id);const merged=old?{...item,status:old.status,quantity:old.quantity,note:old.note,estimatedPrice:old.estimatedPrice,actualPrice:old.actualPrice,purchasePlatform:old.purchasePlatform,reminderDate:old.reminderDate,luggageId:old.luggageId,updatedAt:old.updatedAt}:item;return {...merged,priority:resolved.priority,helperText:resolved.helperText,status:old?.status||resolved.status,tags:resolved.tags,hidden:!resolved.visible}}),...custom]
+ const forced=new Set(forcedVisibleCategories);const prior=new Map(previous.filter(x=>x.isSystemItem).map(x=>[x.id,x]));const custom=previous.filter(x=>!x.isSystemItem)
+ return [...master.map(item=>{const resolved=resolveItemForProfile(item,profile);const old=prior.get(item.id);const merged=old?{...item,preparationStatus:old.preparationStatus,purchaseStatusOverride:old.purchaseStatusOverride,quantity:old.quantity,note:old.note,systemTipHidden:old.systemTipHidden??false,visibilityOverride:old.visibilityOverride,actualPrice:old.actualPrice,purchasePlatform:old.purchasePlatform,reminderDate:old.reminderDate,luggageId:old.luggageId,updatedAt:old.updatedAt}:item;return {...merged,priority:resolved.priority,helperText:resolved.helperText,preparationStatus:old?.preparationStatus||resolved.preparationStatus,purchaseStatus:old?.purchaseStatusOverride??resolved.purchaseStatus,tags:resolved.tags,hidden:old?.visibilityOverride==='hide'?true:forced.has(item.categoryId)?false:!resolved.visible}}),...custom]
 }
 
-export function generateCategories(profile:UserProfile,items:ChecklistItem[],previous:Category[]=defaultCategories){const custom=previous.filter(c=>!c.isSystemCategory);return [...defaultCategories.map(c=>({...c,hidden:!items.some(i=>i.categoryId===c.id&&!i.hidden)})),...custom.map(c=>({...c,hidden:!items.some(i=>i.categoryId===c.id&&!i.hidden)}))]}
+export function generateCategories(profile:UserProfile,items:ChecklistItem[],previous:Category[]=defaultCategories){const existing=new Map(previous.map(c=>[c.id,c]));const custom=previous.filter(c=>!c.isSystemCategory);const merge=(c:Category)=>{const old=existing.get(c.id);const automatic=!items.some(i=>i.categoryId===c.id&&!i.hidden);return {...c,visibilityOverride:old?.visibilityOverride,hidden:old?.visibilityOverride==='show'?false:old?.visibilityOverride==='hide'?true:automatic}};return [...defaultCategories.map(merge),...custom.map(merge)]}
 export function getPersonalizedTips(profile:UserProfile){const tips:string[]=[];if(profile.studentStatus==='new'&&profile.educationStage==='undergraduate')tips.push('报到材料建议统一放入文件袋，重要证件随身携带。','先查看学校是否统一提供床上用品，再决定购买。');if(profile.studentStatus==='new'&&profile.educationStage==='postgraduate')tips.push('提前查看研究生院和学院的报到要求。','毕业证、学位证原件与复印件建议分开放置。');if(profile.studentStatus==='returning')tips.push('看一眼新学期课表、选课结果和学院通知。','先检查宿舍或家中剩余用品，不够再补货。');if(profile.accommodation==='commute')tips.push('提前确认通勤路线，开学第一周多预留一些时间。','雨伞、水杯和充电设备可长期放在通勤包。');else tips.push('确认宿舍开放时间和近期天气，再安排到校行程。');if(profile.outOfTown)tips.push('车票、身份证和充电设备放在随身包，不要托运或邮寄。');return tips.slice(0,4)}
