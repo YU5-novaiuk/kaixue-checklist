@@ -25,6 +25,7 @@ const {createDefaultData}=load('src/data/defaults.ts')
 const {generateChecklist}=load('src/lib/checklistGenerator.ts')
 const {supportsLocation,supportsPurchase}=load('src/lib/itemCapabilities.ts')
 const {applyBatchItemPatch}=load('src/lib/batchItems.ts')
+const {parsePastedText,draftsFromNames,draftsFromTable}=load('src/lib/externalImport.ts')
 
 const now=new Date().toISOString()
 const base={id:'x',name:'床单',categoryId:'dorm',itemType:'physical',priority:'essential',preparationStatus:'unprepared',tags:[],isSystemItem:false,createdAt:now,updatedAt:now}
@@ -100,6 +101,19 @@ assert.equal(payload.backupVersion,3);assert.equal(serialized.includes('purchase
 assert.equal(extractBackupData(payload),payload.data);assert.throws(()=>extractBackupData({items:[]}))
 const restoredData=migrateData(extractBackupData(payload));const restoredItem=restoredData.items.find(item=>item.id==='packed')
 assert.equal(restoredItem?.purchaseStatusOverride,'purchased');assert.equal(restoredItem?.note,'取件码123');assert.equal(restoredItem?.actualPrice,52)
+
+// 旧数据没有 gender 或 category.order 时保持可用，不猜测性别，并按原数组顺序补 order。
+const legacy=createDefaultData();delete legacy.profile.gender;legacy.version=11;legacy.categories=legacy.categories.slice(0,3).map(category=>Object.fromEntries(Object.entries(category).filter(([key])=>key!=='order')))
+const migratedLegacy=migrateData(legacy);assert.equal(migratedLegacy.profile.gender,undefined);assert.deepEqual(Array.from(migratedLegacy.categories.filter(category=>['uncategorized','documents','registration'].includes(category.id)).map(category=>category.order)),[0,1,2])
+
+// 外部文本采用保守分行；表格兼容单列、多列、中英文列名和精确重复提示。
+assert.equal(Array.from(parsePastedText('身份证\n充电器\n雨伞\n洗发水')).join('|'),'身份证|充电器|雨伞|洗发水')
+assert.equal(Array.from(parsePastedText('充电器，床单；雨伞')).join('|'),'充电器|床单|雨伞')
+assert.equal(Array.from(parsePastedText('身份证\n充电器，备注里有逗号')).join('|'),'身份证|充电器，备注里有逗号')
+const importCategories=[{id:'uncategorized',name:'未分类',icon:'Folder',order:0,isSystemCategory:true},{id:'dorm',name:'宿舍用品',icon:'Bed',order:1,isSystemCategory:true}]
+const textDrafts=draftsFromNames(['充电器','雨伞'],importCategories,['充电器']);assert.equal(textDrafts[0].duplicate,true);assert.equal(textDrafts[0].include,false);assert.equal(textDrafts[1].include,true)
+const oneColumn=draftsFromTable([['名称'],['床单'],['被套'],['枕头']],importCategories,[]);assert.equal(oneColumn.length,3);assert.equal(oneColumn[0].name,'床单')
+const multiColumn=draftsFromTable([['name','category','importance','note'],['床单','宿舍用品','必需','确认尺寸']],importCategories,[]);assert.equal(multiColumn[0].categoryId,'dorm');assert.equal(multiColumn[0].priority,'essential');assert.equal(multiColumn[0].note,'确认尺寸')
 
 // Sticky 操作区和学校快递站单入口保持在指定页面层，不改变位置数据。
 const checklistSource=fs.readFileSync('src/app/checklist/page.tsx','utf8');const cssSource=fs.readFileSync('src/app/globals.css','utf8');const luggageSource=fs.readFileSync('src/app/luggage/page.tsx','utf8')

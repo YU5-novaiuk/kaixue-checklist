@@ -6,6 +6,6 @@ export const itemTypeLabels:Record<ItemType,string>={physical:'物品',document:
 export const preparationStatuses:PreparationStatus[]=['unprepared','in_progress','prepared']
 export const purchaseStatuses:PurchaseStatus[]=['not_required','to_buy','purchased','buy_after_arrival']
 export const storageKey='campus-ready-data-v1'
-export const DATA_VERSION=11
+export const DATA_VERSION=13
 export const BACKUP_SCHEMA_VERSION=3
 export const APP_IDENTIFIER='open-school-checklist'

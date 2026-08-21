@@ -1,22 +1,24 @@
 import { createDefaultData,defaultCategories,defaultLuggage,defaultProfile,makeDefaultItems } from '@/data/defaults'
 import { generateCategories,generateChecklist } from '@/lib/checklistGenerator'
 import { APP_IDENTIFIER,BACKUP_SCHEMA_VERSION,DATA_VERSION } from '@/lib/constants'
-import { AppData,BackupPayload,Category,ChecklistItem,PreparationStatus,PurchaseStatus,UserProfile } from '@/types/checklist'
+import { AppData,BackupPayload,Category,ChecklistItem,PreparationStatus,Priority,PurchaseStatus,UserProfile } from '@/types/checklist'
 
 type Loose=Record<string,unknown>
 const isObject=(value:unknown):value is Loose=>!!value&&typeof value==='object'&&!Array.isArray(value)
 const preparationValues:PreparationStatus[]=['unprepared','in_progress','prepared']
 const purchaseValues:PurchaseStatus[]=['not_required','to_buy','purchased','buy_after_arrival']
+const legacyDetailedClothingNames=new Set(['短袖','长袖','长裤','短裤','牛仔裤','内衣','袜子','外套','运动鞋','休闲鞋','凉鞋','靴子','皮鞋','春装','秋装','冬装'])
 const timingToStatus=(value:unknown):PurchaseStatus|undefined=>value==='after_arrival'?'buy_after_arrival':value==='before_arrival'?'to_buy':undefined
 
 function migrateProfile(value:unknown):UserProfile{
  const source=isObject(value)?sourceProfile(value):{}
  const legacyType=source.studentType
  const studentStatus=source.studentStatus==='returning'||legacyType==='returning'?'returning':'new'
- const educationStage=studentStatus==='new'?(source.educationStage==='postgraduate'||legacyType==='postgraduate_new'?'postgraduate':'undergraduate'):undefined
+ const educationStage=source.educationStage==='secondary'||source.educationStage==='junior_high'||source.educationStage==='high_school'?'secondary':source.educationStage==='postgraduate'||legacyType==='postgraduate_new'?'postgraduate':'undergraduate'
+ const gender=source.gender==='female'||source.gender==='male'?source.gender:undefined
  const accommodation=source.accommodation==='commute'?'commute':'dorm'
  const militaryTraining=studentStatus==='new'&&(source.militaryTraining==='yes'||source.militaryTraining==='no'||source.militaryTraining==='unknown')?source.militaryTraining:studentStatus==='new'?'unknown':'no'
- return {...defaultProfile,studentStatus,educationStage,accommodation,outOfTown:source.outOfTown===true,militaryTraining,registrationDate:typeof source.registrationDate==='string'?source.registrationDate:undefined,needsIdentityConfirmation:source.needsIdentityConfirmation===true}
+ return {...defaultProfile,studentStatus,educationStage,gender,accommodation,outOfTown:source.outOfTown===true,militaryTraining,registrationDate:typeof source.registrationDate==='string'?source.registrationDate:undefined,needsIdentityConfirmation:source.needsIdentityConfirmation===true}
 }
 function sourceProfile(value:Loose){const rest={...value};for(const key of ['city','schoolCity','locationCity','enableBudget','enableLuggage','enableSkincare','enableMakeup'])delete rest[key];return rest}
 
@@ -26,7 +28,7 @@ function migrateStatuses(source:Loose,sourceVersion:number){
  const storedOverride=purchaseValues.includes(source.purchaseStatusOverride as PurchaseStatus)?source.purchaseStatusOverride as PurchaseStatus:undefined
  const timingOverride=timingToStatus(source.purchaseTimingOverride);const timingStatus=timingToStatus(source.purchaseTiming)
  const migratedPurchase=currentPurchase??timingOverride??timingStatus
- const migratedOverride=storedOverride??(sourceVersion<DATA_VERSION?currentPurchase??timingOverride:undefined)
+ const migratedOverride=storedOverride??(sourceVersion<11?currentPurchase??timingOverride:undefined)
  if(current)return {preparationStatus:current,purchaseStatus:migratedPurchase,purchaseStatusOverride:migratedOverride,luggageId:typeof source.luggageId==='string'&&source.luggageId!=='arrival'?source.luggageId:undefined}
  const old=String(source.status||'unprepared')
  let preparationStatus:PreparationStatus='unprepared';let purchaseStatus:PurchaseStatus|undefined=migratedPurchase;let purchaseStatusOverride:PurchaseStatus|undefined=migratedOverride;let luggageId=typeof source.luggageId==='string'&&source.luggageId!=='arrival'?source.luggageId:undefined
@@ -44,14 +46,19 @@ function migrateStatuses(source:Loose,sourceVersion:number){
 export function migrateItem(value:unknown,fallback?:ChecklistItem,sourceVersion=0):ChecklistItem{
  const source=isObject(value)?value:{};const migrated=migrateStatuses(source,sourceVersion);const itemType=source.itemType==='document'||source.itemType==='task'||source.itemType==='physical'?source.itemType:fallback?.itemType||'physical';const name=typeof source.name==='string'?source.name:fallback?.name||'未命名事项'
  const now=new Date().toISOString()
- const item:ChecklistItem={id:typeof source.id==='string'?source.id:fallback?.id||`recovered-${Date.now()}`,name,categoryId:typeof source.categoryId==='string'?source.categoryId:fallback?.categoryId||'uncategorized',itemType,priority:source.priority==='essential'||source.priority==='optional'||source.priority==='recommended'?source.priority:fallback?.priority||'recommended',preparationStatus:migrated.preparationStatus,purchaseStatus:migrated.purchaseStatus??fallback?.purchaseStatus,purchaseStatusOverride:migrated.purchaseStatusOverride,helperText:typeof source.helperText==='string'?source.helperText:fallback?.helperText,systemTipHidden:source.systemTipHidden===true,visibilityOverride:source.visibilityOverride==='hide'?'hide':undefined,applicability:fallback?.applicability,rules:fallback?.rules,quantity:typeof source.quantity==='number'?source.quantity:fallback?.quantity,actualPrice:typeof source.actualPrice==='number'?source.actualPrice:undefined,purchasePlatform:typeof source.purchasePlatform==='string'?source.purchasePlatform:undefined,reminderDate:typeof source.reminderDate==='string'?source.reminderDate:undefined,luggageId:migrated.luggageId,tags:Array.isArray(source.tags)?source.tags.filter((x):x is string=>typeof x==='string'):fallback?.tags||[],note:typeof source.note==='string'?source.note:undefined,isSystemItem:source.isSystemItem===true||fallback?.isSystemItem===true,hidden:source.hidden===true,createdAt:typeof source.createdAt==='string'?source.createdAt:fallback?.createdAt||now,updatedAt:typeof source.updatedAt==='string'?source.updatedAt:fallback?.updatedAt||now}
+ const priority=source.priority==='essential'||source.priority==='optional'||source.priority==='recommended'?source.priority:fallback?.priority||'recommended';const priorityOverride=source.priorityOverride==='essential'||source.priorityOverride==='optional'||source.priorityOverride==='recommended'?source.priorityOverride as Priority:undefined
+ const item:ChecklistItem={id:typeof source.id==='string'?source.id:fallback?.id||`recovered-${Date.now()}`,name,categoryId:typeof source.categoryId==='string'?source.categoryId:fallback?.categoryId||'uncategorized',itemType,priority,priorityOverride,preparationStatus:migrated.preparationStatus,purchaseStatus:migrated.purchaseStatus??fallback?.purchaseStatus,purchaseStatusOverride:migrated.purchaseStatusOverride,helperText:typeof source.helperText==='string'?source.helperText:fallback?.helperText,systemTipHidden:source.systemTipHidden===true,visibilityOverride:source.visibilityOverride==='hide'?'hide':undefined,applicability:fallback?.applicability,rules:fallback?.rules,quantity:typeof source.quantity==='number'?source.quantity:fallback?.quantity,actualPrice:typeof source.actualPrice==='number'?source.actualPrice:undefined,purchasePlatform:typeof source.purchasePlatform==='string'?source.purchasePlatform:undefined,reminderDate:typeof source.reminderDate==='string'?source.reminderDate:undefined,luggageId:migrated.luggageId,tags:Array.isArray(source.tags)?source.tags.filter((x):x is string=>typeof x==='string'):fallback?.tags||[],note:typeof source.note==='string'?source.note:undefined,isSystemItem:source.isSystemItem===true||fallback?.isSystemItem===true,hidden:source.hidden===true,createdAt:typeof source.createdAt==='string'?source.createdAt:fallback?.createdAt||now,updatedAt:typeof source.updatedAt==='string'?source.updatedAt:fallback?.updatedAt||now}
  return item
+}
+
+function hasMeaningfulLegacyClothingChanges(source:Loose){
+ return (typeof source.preparationStatus==='string'&&source.preparationStatus!=='unprepared')||(['to_buy','purchased','buy_after_arrival'].includes(String(source.purchaseStatus)))||typeof source.purchaseStatusOverride==='string'||typeof source.priorityOverride==='string'||(typeof source.quantity==='number'&&source.quantity!==1)||typeof source.actualPrice==='number'||(typeof source.note==='string'&&source.note.trim().length>0)||typeof source.purchasePlatform==='string'||typeof source.reminderDate==='string'||typeof source.luggageId==='string'||source.systemTipHidden===true||source.visibilityOverride==='hide'||(typeof source.status==='string'&&!['','unprepared'].includes(source.status))
 }
 
 export function migrateData(value:unknown):AppData{
  if(!isObject(value))return createDefaultData()
  const profile=migrateProfile(value.profile);const defaults=makeDefaultItems();const rawItems=Array.isArray(value.items)?value.items:[];const sourceVersion=typeof value.version==='number'?value.version:0
- const normalized=rawItems.map(raw=>{const source=isObject(raw)?raw:{};const system=defaults.find(x=>x.id===source.id||(source.isSystemItem===true&&x.name===source.name&&x.categoryId===source.categoryId));return migrateItem(raw,system,sourceVersion)})
+ const normalized=rawItems.flatMap(raw=>{const source=isObject(raw)?raw:{};const legacyClothing=sourceVersion<DATA_VERSION&&source.isSystemItem===true&&source.categoryId==='clothes'&&typeof source.name==='string'&&legacyDetailedClothingNames.has(source.name);if(legacyClothing){if(!hasMeaningfulLegacyClothingChanges(source))return [];const preserved=migrateItem(raw,undefined,sourceVersion);return [{...preserved,id:`legacy-${preserved.id}`,isSystemItem:false,tags:[...new Set([...preserved.tags,'旧版保留'])]}]}const system=defaults.find(x=>x.id===source.id||(source.isSystemItem===true&&x.name===source.name&&x.categoryId===source.categoryId));return [migrateItem(raw,system,sourceVersion)]})
  const rawCategories=Array.isArray(value.categories)?value.categories.filter(isObject):[];const categories:Category[]=rawCategories.map((c,index)=>({id:typeof c.id==='string'?c.id:`category-${index}`,name:typeof c.name==='string'?c.name:'未命名分类',icon:typeof c.icon==='string'?c.icon:'Folder',order:typeof c.order==='number'?c.order:index,isSystemCategory:c.isSystemCategory===true,hidden:c.hidden===true,visibilityOverride:c.visibilityOverride==='show'||c.visibilityOverride==='hide'?c.visibilityOverride:undefined}))
  for(const category of defaultCategories)if(!categories.some(c=>c.id===category.id))categories.push({...category})
  const forced=[...new Set([...categories.filter(c=>c.visibilityOverride==='show').map(c=>c.id),...categories.filter(c=>c.id==='beauty'&&!c.hidden).map(c=>c.id)])]
